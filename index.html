@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>La ley de Lenz y la conservación de la energía</title>
+<style>
+:root{--bg:#eef1f4;--fg:#1b2430;--mut:#5b6673;--card:#fff;--line:#cfd6de;--ac:#1f5f8b;--bad:#b3362b;--ok:#2a7a3b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12171d;--fg:#e8edf2;--mut:#9aa6b2;--card:#1b222a;--line:#34404c;--ac:#6bb3e0;--bad:#ff8173;--ok:#7bd88f}}
+:root[data-theme="dark"]{--bg:#12171d;--fg:#e8edf2;--mut:#9aa6b2;--card:#1b222a;--line:#34404c;--ac:#6bb3e0;--bad:#ff8173;--ok:#7bd88f}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:960px;margin:0 auto;padding:20px 16px 40px}
+h1{font:600 clamp(22px,4vw,30px)/1.2 Georgia,"Times New Roman",serif;margin:0 0 6px}
+h2{font-size:17px;margin:0 0 8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+#msg{color:var(--mut);margin:0 0 14px;max-width:70ch}
+.ctl{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+button{font:inherit;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer}
+button:hover{border-color:var(--ac)}button:focus-visible,input:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+button.pri{background:var(--ac);color:#fff;border-color:var(--ac)}
+input[type=range]{flex:1;min-width:140px;accent-color:var(--ac)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:720px){.grid{grid-template-columns:1fr}}
+.pn{background:var(--card);border:2px solid var(--line);border-radius:10px;padding:12px}
+.pn.ok{border-color:var(--ok)}.pn.no{border-color:var(--bad)}
+canvas{width:100%;height:auto;display:block}
+.tag{font-size:14px;font-weight:600}.ok .tag{color:var(--ok)}.no .tag{color:var(--bad)}
+.en{font-size:14px;border-top:1px solid var(--line);margin-top:8px;padding-top:8px}
+.en div{display:flex;justify-content:space-between;gap:8px}
+.bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;width:0;background:var(--bad)}
+.ask{margin:16px 0 8px}.ask div{display:flex;gap:10px;margin-top:8px;flex-wrap:wrap}
+#res{background:var(--card);border-left:4px solid var(--ac);padding:12px 16px;border-radius:6px;margin-top:12px;max-width:80ch}
+#res p{margin:0 0 10px}#res p:last-child{margin:0}
+[hidden]{display:none!important}
+</style></head><body><main>
+<h1>La ley de Lenz y la conservación de la energía</h1>
+<p id="msg">Observa: el imán se acerca al anillo cerrado en las dos situaciones. Mira qué polo aparece en la cara del anillo que mira al imán. Mueve el imán con el botón o con la barra, y también aléjalo.</p>
+<div class="ctl">
+<button class="pri" id="play">▶ Mover imán</button>
+<input type="range" id="sl" min="0" max="100" value="0" step="0.1" aria-label="Posición del imán">
+<button id="inv">Invertir polo del imán</button>
+<button id="rst">↺ Reiniciar</button>
+</div>
+<div class="grid" id="grid"></div>
+<div class="ask" id="ask"><b>¿Cuál de las dos situaciones cumple con la ley de Lenz?</b>
+<div><button data-c="0">Situación 1</button><button data-c="1">Situación 2</button></div></div>
+<div id="res" hidden></div>
+</main>
+<script>
+const dark=matchMedia('(prefers-color-scheme:dark)').matches;
+const INK=dark?'#e8edf2':'#1b2430',RED='#d6453d',BLU='#2f6fb3';
+const W=400,H=240,RX=320,CY=120,ZMAX=6.5,ZMIN=1.6;
+let z=ZMAX,pz=ZMAX,v=0,playing=false,pole='N',chosen=false,realLeft=Math.random()<.5,last=0;
+let Q=[0,0],Wh=[0,0];
+const real=i=>(i===0)===realLeft, opp=p=>p==='N'?'S':'N', col=p=>p==='N'?RED:BLU;
+// Campo de espiras circulares de radio 1 (Biot-Savart) en el plano meridiano
+function fld(rs,x,y){let bx=0,by=0;for(const r0 of rs)for(let k=0;k<24;k++){const p=6.2832*(k+.5)/24,cp=Math.cos(p),sp=Math.sin(p),dx=x-r0,dy=y-cp,d3=Math.pow(dx*dx+dy*dy+sp*sp,1.5)+1e-9;bx+=(1-y*cp)/d3;by+=cp*dx/d3;}return[bx,by];}
+function trace(rs,x,y,sg,h,max,steps){const P=[[x,y]],x0=x,y0=y;for(let i=0;i<steps;i++){let[a,b]=fld(rs,x,y),m=Math.hypot(a,b)||1;const mx=x+sg*h*a/m/2,my=y+sg*h*b/m/2;[a,b]=fld(rs,mx,my);m=Math.hypot(a,b)||1;x+=sg*h*a/m;y+=sg*h*b/m;P.push([x,y]);if(Math.hypot(x,y)>max)break;if(i>8&&Math.hypot(x-x0,y-y0)<h*1.2){P.push([x0,y0]);break;}}return P;}
+function build(rs,seeds,h,max,steps){const L=[];for(const s of seeds){if(s===0){L.push(trace(rs,0,0,1,h,max,steps),trace(rs,0,0,-1,h,max,steps));}else{L.push(trace(rs,0,s,1,h,max,steps),trace(rs,0,-s,1,h,max,steps));}}return L;}
+const ringL=build([0],[0,.45,.75,.9,.97],.04,3.2,900);
+const magL=build(Array.from({length:14},(_,i)=>-2.65+5.3*i/13),[0,.5,.8,.9],.1,12,900);
+const grid=document.getElementById('grid');
+for(let i=0;i<2;i++)grid.insertAdjacentHTML('beforeend',`<section class="pn" id="p${i}"><h2>Situación ${i+1} <span class="tag" id="t${i}"></span></h2><canvas id="c${i}" width="${W}" height="${H}" role="img" aria-label="Imán acercándose a un anillo, situación ${i+1}"></canvas><p class="en" id="e${i}" hidden></p></section>`);
+const cv=[0,1].map(i=>document.getElementById('c'+i).getContext('2d'));
+const $=id=>document.getElementById(id);
+const sl=$('sl'),btn=$('play');
+
+function drawLines(c,Ls,ox,oy,s,al,flip,ring){c.save();c.strokeStyle=INK;c.fillStyle=INK;c.globalAlpha=al;c.lineWidth=1.2;
+ for(const P of Ls){if(P.length<3)continue;c.beginPath();P.forEach(([x,y],k)=>k?c.lineTo(ox+x*s,oy+y*s):c.moveTo(ox+x*s,oy+y*s));c.stroke();
+  const j=ring?1:Math.floor(P.length*.4),t=flip?-1:1;let dx=(P[j+1][0]-P[j][0])*t,dy=(P[j+1][1]-P[j][1])*t;const m=Math.hypot(dx,dy)||1;dx/=m;dy/=m;const px=ox+P[j][0]*s,py=oy+P[j][1]*s;
+  c.beginPath();c.moveTo(px+dx*6,py+dy*6);c.lineTo(px-dx*4-dy*4,py-dy*4+dx*4);c.lineTo(px-dx*4+dy*4,py-dy*4-dx*4);c.fill();}
+ c.restore();}
+function sym(c,x,y,out,al){c.save();c.globalAlpha=al;c.strokeStyle=INK;c.fillStyle=INK;c.lineWidth=2;c.beginPath();c.arc(x,y,8,0,7);c.stroke();
+ if(out){c.beginPath();c.arc(x,y,2.5,0,7);c.fill();}else{c.beginPath();c.moveTo(x-4,y-4);c.lineTo(x+4,y+4);c.moveTo(x+4,y-4);c.lineTo(x-4,y+4);c.stroke();}c.restore();}
+function arrow(c,x,y,len,color){if(Math.abs(len)<2)return;c.save();c.strokeStyle=color;c.fillStyle=color;c.lineWidth=4;c.beginPath();c.moveTo(x,y);c.lineTo(x+len,y);c.stroke();
+ const d=Math.sign(len);c.beginPath();c.moveTo(x+len+d*10,y);c.lineTo(x+len,y-7);c.lineTo(x+len,y+7);c.fill();c.restore();}
+
+function draw(i,e,F,dirF){
+ const c=cv[i];c.clearRect(0,0,W,H);
+ const cx=RX-z*40;
+ drawLines(c,magL,cx,CY,17,.35,pole==='S',false);
+ const k=Math.min(1,Math.abs(v)/.3)*Math.min(1,.4+Math.abs(e)*8);
+ const sgn=e>=0?1:-1, same=(sgn>0)===real(i);
+ const left=same?pole:opp(pole);
+ drawLines(c,ringL,RX,CY,62,.6*k,left==='N',true);
+ // anillo
+ c.save();c.strokeStyle='#c2703a';c.lineWidth=9;c.beginPath();c.ellipse(RX,CY,12,62,0,0,7);c.stroke();c.restore();
+ sym(c,RX,CY-62,left==='S',k);sym(c,RX,CY+62,left==='N',k);
+ c.save();c.globalAlpha=k;c.font='bold 22px system-ui';c.textAlign='center';
+ c.fillStyle=col(left);c.fillText(left,RX-32,CY+8);c.fillStyle=col(opp(left));c.fillText(opp(left),RX+32,CY+8);c.restore();
+ // imán
+ c.fillStyle=col(opp(pole));c.fillRect(cx-45,CY-17,45,34);c.fillStyle=col(pole);c.fillRect(cx,CY-17,45,34);
+ c.fillStyle='#fff';c.font='bold 18px system-ui';c.textAlign='center';c.fillText(opp(pole),cx-22,CY+6);c.fillText(pole,cx+22,CY+6);
+ if(chosen&&Math.abs(v)>.05){const L=Math.min(80,Math.abs(e)*400),tx=Math.max(100,Math.min(cx,230));
+  arrow(c,cx,CY+48,dirF*L,'#e08a00');c.fillStyle=INK;c.font='13px system-ui';c.textAlign='center';c.fillText('fuerza del anillo sobre el imán',tx,CY+78);
+  if(real(i)){arrow(c,cx,CY-50,-dirF*L,'#2a7a3b');c.fillText('agente externo',tx,CY-62);}else{c.fillText('nadie lo empuja',tx,CY-62);}}
+ 
+}
+function frame(t){
+ const dt=Math.min(.05,(t-last)/1000||0);last=t;
+ if(playing){z-=1.2*dt;if(z<=ZMIN){z=ZMIN;playing=false;btn.textContent='▶ Mover imán';}sl.value=(ZMAX-z)/(ZMAX-ZMIN)*100;}
+ const vi=dt>0?(pz-z)/dt:0;v+=(vi-v)*.4;pz=z;
+ const en=3*z*v/Math.pow(1+z*z,2.5);
+ for(let i=0;i<2;i++){
+  
+  draw(i,en,0,(real(i)?-1:1)*Math.sign(v||1));
+  
+ }
+ requestAnimationFrame(frame);
+}
+btn.onclick=()=>{if(z<=ZMIN+.01){z=ZMAX;pz=ZMAX;v=0;}playing=!playing;btn.textContent=playing?'⏸ Pausa':'▶ Mover imán';};
+sl.oninput=()=>{playing=false;btn.textContent='▶ Mover imán';z=ZMAX-sl.value/100*(ZMAX-ZMIN);};
+$('inv').onclick=()=>{pole=opp(pole);};
+function reset(){chosen=false;realLeft=Math.random()<.5;Q=[0,0];Wh=[0,0];z=pz=ZMAX;v=0;playing=false;sl.value=0;btn.textContent='▶ Mover imán';
+ $('ask').hidden=false;$('res').hidden=true;for(let i=0;i<2;i++){$('e'+i).hidden=true;$('t'+i).textContent='';$('p'+i).className='pn';}}
+$('rst').onclick=reset;
+document.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{
+ const c=+b.dataset.c,ok=real(c),r=realLeft?0:1,w=1-r;chosen=true;Q=[0,0];Wh=[0,0];$('ask').hidden=true;
+ for(let i=0;i<2;i++){$('e'+i).hidden=false;$('e'+i).textContent=real(i)?'Hay que empujar el imán para introducirlo: un agente externo debe hacer trabajo, y esa energía se transforma en energía eléctrica en el anillo.':'Nadie empuja el imán, pero el anillo lo atrae y se movería solo: obtendríamos energía de la nada.';$('p'+i).className='pn '+(real(i)?'ok':'no');$('t'+i).textContent=real(i)?'Cumple la ley de Lenz':'Imposible: viola la conservación';}
+ $('res').hidden=false;
+ $('res').innerHTML=`<p><b>${ok?'Correcto.':'No es esa.'}</b> Cumple la ley de Lenz la situación ${r+1}: la corriente inducida crea en el anillo un polo igual al del imán que se acerca, y se repelen. Para acercarlo hay que empujar, es decir, hacer trabajo. Ese trabajo se transforma en energía eléctrica en el anillo, y no sobra ni falta energía.</p><p>En la situación ${w+1} el anillo atraería al imán que se acerca. Se aceleraría solo, el flujo variaría aún más rápido, la corriente crecería… y se disiparía calor sin que nadie hiciera trabajo: energía gratis. Eso violaría el principio de conservación de la energía, así que no puede suceder.</p><p>Vuelve a mover el imán y compara las flechas de las dos situaciones: en la situación ${r+1} hace falta un agente externo; en la situación ${w+1}, no. El signo negativo de la ley de Faraday expresa esa conservación.</p>`;
+ z=pz=ZMAX;v=0;sl.value=0;playing=false;btn.textContent='▶ Mover imán';
+ $('msg').textContent='Ahora mira las flechas mientras mueves el imán: ¿hace falta que alguien lo empuje?';
+});
+requestAnimationFrame(frame);
+</script></body></html>
